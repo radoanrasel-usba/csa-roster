@@ -37,7 +37,6 @@ function getReportHtml(reportState) {
       :root { --navy:#06285f; --blue:#0c63c7; --green:#177b38; --gold:#c69200; --red:#d7192f; --line:#d7e1ec; --ink:#111827; }
       * { box-sizing: border-box; }
       
-      /* রিমোট রিপোর্টের মার্জিন ও প্যাডিং কমানো হয়েছে উচ্চতা সংকোচনের জন্য */
       body { margin:0; background:#dcecff; font-family:Inter,Arial,sans-serif; color:var(--ink); }
       .toolbar { position:sticky; top:0; z-index:3; display:flex; justify-content:center; gap:10px; padding:10px; background:#061f4c; }
       .toolbar button { border:0; border-radius:10px; padding:10px 15px; color:white; font-weight:800; background:linear-gradient(135deg,#0b63ce,#07306c); cursor:pointer; }
@@ -49,25 +48,21 @@ function getReportHtml(reportState) {
       .brand span { letter-spacing:.44em; color:var(--navy); font-weight:900; font-size:12px; display:block; margin-top:4px; }
       h1 { margin:0; color:var(--navy); text-align:right; font-size:36px; letter-spacing:.02em; font-weight:900; }
       
-      /* ৩টি ভিন্ন ইনফো বক্সের গ্রিড ও স্টাইল আধুনিকীকরণ */
       .info-row { margin:15px 0; display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; }
       .info-box { padding:18px 16px; background:#c8e9ff; color:#06285f; border-radius:16px; text-align:center; border:2px solid rgba(12,99,199,0.22); box-shadow:0 4px 12px rgba(6,40,95,0.06); }
       .info-box span { display:block; font-size:13px; opacity:0.95; font-weight:900; color:#06285f; letter-spacing:0.05em; }
       .info-box strong { display:block; margin-top:6px; font-size:19px; font-weight:900; color:#06285f; text-shadow:0 1px 2px rgba(255,255,255,0.5); }
       
-      /* কলামগুলোর ফাঁকা জায়গা কমানো হয়েছে */
       .columns { display:grid; grid-template-columns:1fr 1fr 1fr; gap:15px; align-items:start; }
       .column { border:1px solid var(--line); border-radius:12px; overflow:hidden; background:#fff; }
       .column h2 { margin:0; padding:10px; text-align:center; font-size:21px; font-weight:900; }
       .domestic h2 { color:var(--green); } .international h2 { color:var(--blue); } .off h2 { color:var(--gold); }
       
-      /* ক্যাটাগরি টাইটেলের প্যাডিং সংকোচন */
       .category-title { color:white; padding:6px 10px; font-size:13px; font-weight:900; text-align:center; text-transform:uppercase; }
       .domestic .category-title { background:var(--green); } .international .category-title { background:var(--blue); } .off .category-title { background:var(--gold); }
       .category-title.absent { background:var(--red); }
       
       table { width:100%; border-collapse:collapse; table-layout:fixed; }
-      /* টেবিল রো এর উচ্চতা ও প্যাডিং সংকোচন */
       td { border-bottom:1px solid #e5ebf3; padding:3px 8px; font-size:12.5px; vertical-align:top; font-weight:800; color:var(--ink); }
       td:first-child { width:28px; color:var(--navy); font-weight:900; }
       .absent-row td { color:var(--red); font-weight:900; }
@@ -147,11 +142,16 @@ function getReportHtml(reportState) {
 }
 
 function renderReportSection(section, selections, staffMap, count, instruction, sectionCounts, total) {
-  let extraContent = "";
-  
-  // আধুনিক স্পেশাল ইন্সট্রাকশন বক্স (বর্ডার-লেফট এবং গ্রেডিয়েন্ট শ্যাডো ইফেক্ট)
+  let fieldsToRender = [...section.fields];
+  let customPostContent = "";
+
+  // ডমেস্টিক কলামের রেন্ডারিং এবং স্পেশাল পোস্ট কন্টেন্ট (NIGHT STAFF এবং SPECIAL INSTRUCTION)
   if (section.key === "domestic") {
-    extraContent = `
+    const nightStaffIds = selections["international.nightStaff"] || [];
+    const nightStaffMarkup = renderSpecialReportCategory("NIGHT STAFF", nightStaffIds, staffMap, "#701a75"); // Deep Purple
+
+    customPostContent = `
+      ${nightStaffMarkup}
       <div style="margin-top: 15px; border: 1px solid rgba(12,99,199,0.15); border-left: 5px solid var(--blue); border-radius: 14px; overflow: hidden; background: linear-gradient(135deg, #f0f9ff, #ffffff); box-shadow: 0 4px 12px rgba(6,40,95,0.04);">
         <h3 style="margin: 0; padding: 10px 14px; color: var(--navy); border-bottom: 1px solid rgba(12,99,199,0.1); font-size: 14px; font-weight: 900; background: rgba(200,233,255,0.3); letter-spacing: 0.05em;">DAILY SPECIAL INSTRUCTIONS</h3>
         <div style="min-height: 90px; padding: 12px 14px; white-space: pre-wrap; color: var(--navy); font-size: 13px; line-height: 1.5; font-weight: 800;">${escapeHtml(instruction || "Please follow airport and airline guidelines.")}</div>
@@ -159,25 +159,73 @@ function renderReportSection(section, selections, staffMap, count, instruction, 
     `;
   }
 
+  // ইন্টারন্যাশনাল কলাম থেকে তিনটি বিশেষ কন্টেন্ট ফিল্টার আউট করা
+  if (section.key === "international") {
+    fieldsToRender = fieldsToRender.filter(([key]) => 
+      key !== "international.earlyMorningCounter" && 
+      key !== "international.earlyMorningRamp" && 
+      key !== "international.nightStaff"
+    );
+  }
+
+  // অফ ডিউটি কলামের রেন্ডারিং এবং শেষে EARLY MORNING যুক্ত করা
   if (section.key === "off") {
-    extraContent = `
-      <div style="margin-top: 15px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #fff; box-shadow: 0 4px 12px rgba(6,40,95,0.03);">
-        <h3 style="margin: 0; padding: 10px 12px; color: var(--navy); border-bottom: 1px solid var(--line); font-size: 14px; font-weight: 900; background: #f8fafc;">ROSTER SUMMARY</h3>
-        <div style="display: flex; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: 12.5px; font-weight: 800; color: #334155;"><span>Domestic Staff</span><strong>${sectionCounts.domestic || 0}</strong></div>
-        <div style="display: flex; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: 12.5px; font-weight: 800; color: #334155;"><span>International Staff</span><strong>${sectionCounts.international || 0}</strong></div>
-        <div style="display: flex; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: 12.5px; font-weight: 800; color: #334155;"><span>Day Off</span><strong>${sectionCounts.off || 0}</strong></div>
-        <div style="display: flex; justify-content: space-between; padding: 10px 12px; color: white; background: var(--navy); font-size: 12.5px; font-weight: 900;"><span>TOTAL STAFF</span><strong>${total}</strong></div>
-      </div>
+    const emCounterIds = selections["international.earlyMorningCounter"] || [];
+    const emRampIds = selections["international.earlyMorningRamp"] || [];
+
+    const emCounterMarkup = renderSpecialReportCategory("EARLY MORNING (COUNTER)", emCounterIds, staffMap, "#d97706"); // Amber/Gold
+    const emRampMarkup = renderSpecialReportCategory("EARLY MORNING (RAMP)", emRampIds, staffMap, "#d97706");
+
+    customPostContent = `
+      ${emCounterMarkup}
+      ${emRampMarkup}
     `;
   }
+
+  // কলামের মোট স্টাফ সংখ্যা সঠিকভাবে গণনার হিসাব
+  const displayCount = calculateColumnTotal(section.key, selections, fieldsToRender);
 
   return `
   <div style="display: flex; flex-direction: column;">
     <article class="column ${section.key}">
-      <h2>${section.title} (${count})</h2>
-      ${section.fields.map(([fieldKey, label]) => renderReportCategory(label, selections[fieldKey] || [], staffMap)).join("")}
+      <h2>${section.title} (${displayCount})</h2>
+      ${fieldsToRender.map(([fieldKey, label]) => renderReportCategory(label, selections[fieldKey] || [], staffMap)).join("")}
     </article>
-    ${extraContent}
+    ${customPostContent}
+  </div>`;
+}
+
+// কলাম টোটাল হিসাব করার নির্ভরযোগ্য হেল্পার ফাংশন
+function calculateColumnTotal(sectionKey, selections, fieldsToRender) {
+  let count = fieldsToRender.reduce((sum, [key]) => sum + (selections[key] || []).length, 0);
+  if (sectionKey === "domestic") {
+    count += (selections["international.nightStaff"] || []).length;
+  }
+  if (sectionKey === "off") {
+    count += (selections["international.earlyMorningCounter"] || []).length;
+    count += (selections["international.earlyMorningRamp"] || []).length;
+  }
+  return count;
+}
+
+// স্পেশাল ডিউটি বক্সগুলো সুন্দর ড্যাশড বর্ডার ডিজাইনে রেন্ডার করার ফাংশন
+function renderSpecialReportCategory(label, ids, staffMap, specialBgColor) {
+  const rows = ids
+    .map((id) => staffMap.get(id))
+    .filter(Boolean)
+    .sort((a, b) => a.number - b.number || a.id.localeCompare(b.id));
+  return `
+  <div class="category" style="margin-top: 10px; border: 2px dashed ${specialBgColor}; border-radius: 12px; overflow: hidden; background: #fff;">
+    <div class="category-title" style="background: ${specialBgColor}; color: white; padding: 6px 10px; font-size: 13px; font-weight: 900; text-align: center; text-transform: uppercase;">${escapeHtml(label)} (SPECIAL DUTY)</div>
+    <table>
+      <tbody>
+        ${rows.length ? rows.map((person, index) => `
+          <tr>
+            <td style="width: 28px; color: ${specialBgColor}; font-weight: 900; border-bottom: 1px solid #e5ebf3; padding: 4px 10px; font-size: 12.5px;">${index + 1}</td>
+            <td style="font-weight: 850; color: var(--ink); border-bottom: 1px solid #e5ebf3; padding: 4px 10px; font-size: 12.5px;">${escapeHtml(person.number)} - ${escapeHtml(person.name)}</td>
+          </tr>`).join("") : `<tr><td colspan="2" class="empty">No staff selected</td></tr>`}
+      </tbody>
+    </table>
   </div>`;
 }
 
