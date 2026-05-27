@@ -6,38 +6,51 @@ const sectionSchema = [
     key: "domestic",
     title: "DOMESTIC",
     fields: [
-      ["domestic.supervisor", "OVERALL SUPERVISOR"],
+      ["domestic.frontGateVip", "FRONT GATE (VIP)"],
+      ["domestic.frontGateGen", "FRONT GATE (GENERAL)"],
       ["domestic.checking", "CHECKING COUNTER"],
-      ["domestic.arrival", "ARRIVAL BAGGAGE"],
-      ["domestic.frontGate", "FRONT GATE"],
-      ["domestic.wheelChair", "WHEEL CHAIR"],
-      ["domestic.makeup", "BAGGAGE MAKEUP AREA"],
-      ["domestic.ramp", "RAMP AREA"]
+      ["domestic.wheelChairDept", "WHEEL CHAIR (DEPT)"],
+      ["domestic.wheelChairArv", "WHEEL CHAIR (ARV)"],
+      ["domestic.makeup", "BAGGAGE MAKE UP AREA"],
+      ["domestic.ramp", "RAMP AREA"],
+      ["domestic.arrivalBelt", "ARRIVAL BELT"]
     ]
   },
   {
     key: "international",
     title: "INTERNATIONAL",
     fields: [
-      ["international.supervisor", "OVERALL SUPERVISOR"],
       ["international.checking", "CHECKING COUNTER"],
-      ["international.arrivalOutside", "ARRIVAL BAGGAGE (OUTSIDE BELT)"],
-      ["international.arrivalInside", "ARRIVAL BAGGAGE (INSIDE BELT)"],
-      ["international.wheelChair", "WHEELCHAIR"],
       ["international.makeup", "BAGGAGE MAKEUP AREA"],
-      ["international.ramp", "RAMP AREA"]
+      ["international.ramp", "RAMP AREA"],
+      ["international.arrivalBelt", "ARRIVAL BAGGAGE BELT"],
+      ["international.arrivalHall", "ARRIVAL BAGGAGE HALL"],
+      ["international.wheelChairDept", "WHEELCHAIR (DEPT)"],
+      ["international.wheelChairArv", "WHEELCHAIR (ARV)"],
+      ["international.earlyMorningCounter", "EARLY MORNING (COUNTER)"],
+      ["international.earlyMorningRamp", "EARLY MORNING (RAMP)"],
+      ["international.nightStaff", "NIGHT STAFF"]
     ]
   },
   {
     key: "off",
     title: "OFF DUTY",
     fields: [
-      ["off.normal", "NORMAL DAY OFF"],
+      ["off.normal", "DAY OFF"],
       ["off.casualEarned", "CASUAL/EARNED"],
       ["off.sick", "SICK LEAVE"],
+      ["off.compensatory", "COMPENSATORY OFF"],
       ["off.absent", "ABSENT (PREVIOUS DAY)"]
     ]
   }
+];
+
+// ফিমেল হুইলচেয়ার স্পেশাল স্টাফ আইডি লিস্ট
+const WHEELCHAIR_ONLY_IDS = [
+  "USBA-26833", "USBA-26834", "USBA-27790", "USBA-27792",
+  "USBA-28094", "USBA-28097", "USBA-28099", "USBA-28101",
+  "USBA-28103", "USBA-27788", "USBA-27789", "USBA-28095",
+  "USBA-28096", "USBA-28098", "USBA-28100", "USBA-28102"
 ];
 
 const state = {
@@ -46,7 +59,7 @@ const state = {
   shift: "MORNING",
   instruction: "",
   selections: {},
-  customFields: [] // ডাইনামিক ফিল্ড সংরক্ষণের জন্য অ্যারে
+  customFields: []
 };
 
 let staff = [];
@@ -117,7 +130,6 @@ function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
-// স্ট্যাটিক এবং কাস্টম ডাইনামিক ফিল্ডগুলোকে একত্রে পাওয়ার ফাংশন
 function getCombinedSchema() {
   return sectionSchema.map(section => {
     const custom = (state.customFields || []).filter(cf => cf.sectionKey === section.key);
@@ -166,7 +178,6 @@ function bindEvents() {
   $("#excelImport").addEventListener("change", importExcel);
   $("#generateReportBtn").addEventListener("click", generateReport);
 
-  // কাস্টম ফিল্ড এড করার ইভেন্ট লিসেনার
   $("#addCustomFieldBtn").addEventListener("click", () => {
     const section = $("#customFieldSection").value;
     const label = $("#customFieldLabel").value.trim();
@@ -221,7 +232,6 @@ function buildSections() {
     button.addEventListener("click", () => openDropdown(button.dataset.field));
   });
 
-  // কাস্টম ফিল্ড ডিলিট করার লিসেনার বাইন্ডিং
   $$(".delete-field-btn").forEach((btn) => {
     btn.addEventListener("click", (event) => {
       event.stopPropagation();
@@ -329,8 +339,20 @@ function renderOptions(fieldKey, query) {
   const assigned = getAssignedMap(fieldKey);
   const term = query.trim().toLowerCase();
   
+  // কলামটি হুইলচেয়ার সম্পর্কিত কিনা তা যাচাই করার লজিক
+  const isWheelchairField = fieldKey.toLowerCase().includes("wheelchair");
+
   const visible = staff.filter((person) => {
     if (assigned.has(person.id)) return false;
+
+    // হুইলচেয়ার স্টাফ এক্সক্লুসিভিটি ফিল্টার
+    const isWheelchairStaff = WHEELCHAIR_ONLY_IDS.includes(person.id);
+    if (isWheelchairField) {
+      if (!isWheelchairStaff) return false; // হুইলচেয়ার কলামে অন্য কেউ ঢুকতে পারবে না
+    } else {
+      if (isWheelchairStaff) return false; // অন্য সব কলামে হুইলচেয়ারের ফিমেল স্টাফরা হাইড থাকবে
+    }
+
     if (!term) return true;
     return person.id.toLowerCase().includes(term) || person.name.toLowerCase().includes(term);
   }).slice(0, 500);
