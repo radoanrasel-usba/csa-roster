@@ -145,10 +145,11 @@ function renderReportSection(section, selections, staffMap, count, instruction, 
   let fieldsToRender = [...section.fields];
   let customPostContent = "";
 
-  // ডমেস্টিক কলামের রেন্ডারিং এবং স্পেশাল পোস্ট কন্টেন্ট (NIGHT STAFF এবং SPECIAL INSTRUCTION)
+  // ডমেস্টিক কলামের রেন্ডারিং এবং শেষে NIGHT STAFF এবং SPECIAL INSTRUCTION
   if (section.key === "domestic") {
     const nightStaffIds = selections["international.nightStaff"] || [];
-    const nightStaffMarkup = renderSpecialReportCategory("NIGHT STAFF", nightStaffIds, staffMap, "#701a75"); // Deep Purple
+    // নাম রিনেম করে "NIGHT STAFF" এবং ব্যাকগ্রাউন্ড কালার পার্পেল করা হলো
+    const nightStaffMarkup = renderSpecialReportCategory("NIGHT STAFF", nightStaffIds, staffMap, "#701a75");
 
     customPostContent = `
       ${nightStaffMarkup}
@@ -159,7 +160,7 @@ function renderReportSection(section, selections, staffMap, count, instruction, 
     `;
   }
 
-  // ইন্টারন্যাশনাল কলাম থেকে তিনটি বিশেষ কন্টেন্ট ফিল্টার আউট করা
+  // আন্তর্জাতিক কলাম থেকে ৩টি বিশেষ সেকশন রেন্ডার বন্ধ রাখা
   if (section.key === "international") {
     fieldsToRender = fieldsToRender.filter(([key]) => 
       key !== "international.earlyMorningCounter" && 
@@ -168,13 +169,14 @@ function renderReportSection(section, selections, staffMap, count, instruction, 
     );
   }
 
-  // অফ ডিউটি কলামের রেন্ডারিং এবং শেষে EARLY MORNING যুক্ত করা
+  // অফ ডিউটি কলামের শেষে EARLY MORNING বক্স দুটি পার্পেল কালার ব্যাকগ্রাউন্ডে যোগ করা হলো
   if (section.key === "off") {
     const emCounterIds = selections["international.earlyMorningCounter"] || [];
     const emRampIds = selections["international.earlyMorningRamp"] || [];
 
-    const emCounterMarkup = renderSpecialReportCategory("EARLY MORNING (COUNTER)", emCounterIds, staffMap, "#d97706"); // Amber/Gold
-    const emRampMarkup = renderSpecialReportCategory("EARLY MORNING (RAMP)", emRampIds, staffMap, "#d97706");
+    // নাম ও ব্যাকগ্রাউন্ড কালার পার্পেল করা হলো
+    const emCounterMarkup = renderSpecialReportCategory("EARLY MORNING (COUNTER)", emCounterIds, staffMap, "#701a75");
+    const emRampMarkup = renderSpecialReportCategory("EARLY MORNING (RAMP)", emRampIds, staffMap, "#701a75");
 
     customPostContent = `
       ${emCounterMarkup}
@@ -182,7 +184,6 @@ function renderReportSection(section, selections, staffMap, count, instruction, 
     `;
   }
 
-  // কলামের মোট স্টাফ সংখ্যা সঠিকভাবে গণনার হিসাব
   const displayCount = calculateColumnTotal(section.key, selections, fieldsToRender);
 
   return `
@@ -195,7 +196,6 @@ function renderReportSection(section, selections, staffMap, count, instruction, 
   </div>`;
 }
 
-// কলাম টোটাল হিসাব করার নির্ভরযোগ্য হেল্পার ফাংশন
 function calculateColumnTotal(sectionKey, selections, fieldsToRender) {
   let count = fieldsToRender.reduce((sum, [key]) => sum + (selections[key] || []).length, 0);
   if (sectionKey === "domestic") {
@@ -208,7 +208,6 @@ function calculateColumnTotal(sectionKey, selections, fieldsToRender) {
   return count;
 }
 
-// স্পেশাল ডিউটি বক্সগুলো সুন্দর ড্যাশড বর্ডার ডিজাইনে রেন্ডার করার ফাংশন
 function renderSpecialReportCategory(label, ids, staffMap, specialBgColor) {
   const rows = ids
     .map((id) => staffMap.get(id))
@@ -216,7 +215,7 @@ function renderSpecialReportCategory(label, ids, staffMap, specialBgColor) {
     .sort((a, b) => a.number - b.number || a.id.localeCompare(b.id));
   return `
   <div class="category" style="margin-top: 10px; border: 2px dashed ${specialBgColor}; border-radius: 12px; overflow: hidden; background: #fff;">
-    <div class="category-title" style="background: ${specialBgColor}; color: white; padding: 6px 10px; font-size: 13px; font-weight: 900; text-align: center; text-transform: uppercase;">${escapeHtml(label)} (SPECIAL DUTY)</div>
+    <div class="category-title" style="background: ${specialBgColor}; color: white; padding: 6px 10px; font-size: 13px; font-weight: 900; text-align: center; text-transform: uppercase;">${escapeHtml(label)}</div>
     <table>
       <tbody>
         ${rows.length ? rows.map((person, index) => `
