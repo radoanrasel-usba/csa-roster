@@ -339,18 +339,22 @@ function renderOptions(fieldKey, query) {
   const assigned = getAssignedMap(fieldKey);
   const term = query.trim().toLowerCase();
   
-  // কলামটি হুইলচেয়ার সম্পর্কিত কিনা তা যাচাই করার লজিক
   const isWheelchairField = fieldKey.toLowerCase().includes("wheelchair");
+  // অফ ডিউটি কলাম আইডি ফিল্টারিং চেক
+  const isOffDutyField = fieldKey.startsWith("off.");
 
   const visible = staff.filter((person) => {
     if (assigned.has(person.id)) return false;
 
-    // হুইলচেয়ার স্টাফ এক্সক্লুসিভিটি ফিল্টার
     const isWheelchairStaff = WHEELCHAIR_ONLY_IDS.includes(person.id);
-    if (isWheelchairField) {
-      if (!isWheelchairStaff) return false; // হুইলচেয়ার কলামে অন্য কেউ ঢুকতে পারবে না
+    
+    // অফ ডিউটি কলামে মেল এবং ফিমেল (হুইলচেয়ার) উভয় স্টাফই থাকতে পারবে
+    if (isOffDutyField) {
+      // অফ ডিউটির ক্ষেত্রে কোনো হুইলচেয়ারের সীমাবদ্ধতা প্রযোজ্য হবে না
+    } else if (isWheelchairField) {
+      if (!isWheelchairStaff) return false; // হুইলচেয়ার ফিল্ডে শুধু হুইলচেয়ার স্টাফ
     } else {
-      if (isWheelchairStaff) return false; // অন্য সব কলামে হুইলচেয়ারের ফিমেল স্টাফরা হাইড থাকবে
+      if (isWheelchairStaff) return false; // অন্য নরমাল ডিউটিতে হুইলচেয়ারের ফিমেল স্টাফরা বাদ থাকবে
     }
 
     if (!term) return true;
