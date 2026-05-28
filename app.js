@@ -57,7 +57,7 @@ const state = {
   instruction: "",
   selections: {},
   customFields: [],
-  emStaff: [] // E/M চিহ্নিত স্টাফ আইডিগুলো সংরক্ষণের জন্য
+  emStaff: []
 };
 
 let staff = [];
@@ -164,9 +164,12 @@ function bindEvents() {
     saveState();
   });
 
+  // শিফট পরিবর্তন করার সময় সাথে সাথে ভিউ বিল্ড করার লজিক
   $("#shiftSelect").addEventListener("change", (event) => {
     state.shift = event.target.value;
     saveState();
+    buildSections(); 
+    updateAllCounts();
   });
 
   $("#specialInstruction").addEventListener("input", (event) => {
@@ -277,8 +280,11 @@ function renderSelectedLists() {
     
     list.innerHTML = selected.map((person, index) => {
       const isEM = (state.emStaff || []).includes(person.id);
-      // শুধুমাত্র ডমেস্টিক এবং ইন্টারন্যাশনাল কলামের জন্য E/M চেকবক্স প্রদর্শন করার লজিক
-      const showEM = key.startsWith("domestic") || key.startsWith("international");
+      
+      // MORNING শিফটে থাকলেই কেবল ডমেস্টিক এবং ইন্টারন্যাশনাল কলামের জন্য E/M চেকবক্স দেখানোর লজিক
+      const isMorning = state.shift === "MORNING";
+      const showEM = isMorning && (key.startsWith("domestic") || key.startsWith("international"));
+      
       const emToggle = showEM ? `
         <label style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.75rem; color: #cf1f32; font-weight: 800; cursor: pointer; margin-right: 6px; user-select: none;">
           <input type="checkbox" class="em-staff-checkbox" data-staff-id="${person.id}" ${isEM ? "checked" : ""} style="width: 14px; height: 14px; margin: 0; cursor: pointer;"> E/M
@@ -304,7 +310,6 @@ function renderSelectedLists() {
     });
   });
 
-  // E/M চেকবক্স ক্লিকের ইভেন্ট লিসেনার
   $$(".em-staff-checkbox").forEach((cb) => {
     cb.addEventListener("change", () => {
       const id = cb.dataset.staffId;
@@ -376,7 +381,6 @@ function renderOptions(fieldKey, query) {
     const isWheelchairStaff = WHEELCHAIR_ONLY_IDS.includes(person.id);
     
     if (isOffDutyField) {
-      // অফ ডিউটিতে হুইলচেয়ার এবং সাধারণ সব স্টাফই এলাউড
     } else if (isWheelchairField) {
       if (!isWheelchairStaff) return false;
     } else {
