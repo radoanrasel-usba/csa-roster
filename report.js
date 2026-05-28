@@ -10,14 +10,18 @@ function buildRosterReportWindow(reportState) {
 }
 
 function getReportHtml(reportState) {
-  const { date, shift, creator, instruction, staff, schema, selections } = reportState;
+  const { date, shift, creator, instruction, staff, schema, selections, emStaff = [] } = reportState;
   const staffMap = new Map(staff.map((person) => [person.id, person]));
   
-  const sectionCounts = Object.fromEntries(schema.map((section) => [
-    section.key,
-    section.fields.reduce((sum, [key]) => sum + (selections[key] || []).length, 0)
-  ]));
-  const total = Object.values(sectionCounts).reduce((sum, value) => sum + value, 0);
+  // ড্যাশবোর্ডের অরিজিনাল কলাম ভিত্তিক স্টাফ সংখ্যা গণনা (স্পেস সেভিং স্থানান্তর সত্ত্বেও এটি অপরিবর্তিত থাকবে)
+  const originalTotals = { domestic: 0, international: 0, off: 0 };
+  Object.entries(selections).forEach(([key, ids]) => {
+    const len = (ids || []).length;
+    if (key.startsWith("domestic")) originalTotals.domestic += len;
+    else if (key.startsWith("international")) originalTotals.international += len;
+    else if (key.startsWith("off")) originalTotals.off += len;
+  });
+  const total = originalTotals.domestic + originalTotals.international + originalTotals.off;
   
   const dateLabel = new Date(`${date}T00:00:00`).toLocaleDateString("en-GB", {
     day: "2-digit",
@@ -43,9 +47,12 @@ function getReportHtml(reportState) {
       #report { width:1120px; min-height:1400px; margin:15px auto; padding:24px 30px 0; background:white; border:5px solid var(--navy); box-shadow:0 20px 50px rgba(5,31,72,.2); overflow:hidden; }
       
       .report-head { display:flex; justify-content:space-between; align-items:center; }
-      .brand { display:flex; gap:12px; align-items:center; }
-      .brand strong { display:block; color:#e2192a; font-size:32px; line-height:.9; font-weight:900; }
-      .brand span { letter-spacing:.44em; color:var(--navy); font-weight:900; font-size:12px; display:block; margin-top:4px; }
+      
+      /* এটাচমেন্ট ৪ অনুযায়ী ইউএস-বাংলা এয়ারলাইন্স টেক্সট ব্র্যান্ডিং স্টাইল */
+      .brand { display:flex; flex-direction:column; align-items:flex-start; transform:skewX(-12deg); }
+      .brand strong { color:#e2192a; font-size:40px; line-height:0.85; font-weight:900; letter-spacing:-0.03em; }
+      .brand span { letter-spacing:0.38em; color:#06285f; font-weight:900; font-size:14px; margin-top:2px; padding-left:2px; }
+      
       h1 { margin:0; color:var(--navy); text-align:right; font-size:36px; letter-spacing:.02em; font-weight:900; }
       
       .info-row { margin:15px 0; display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; }
@@ -96,7 +103,7 @@ function getReportHtml(reportState) {
       </div>
       
       <main class="columns">
-        ${schema.map((section) => renderReportSection(section, selections, staffMap, sectionCounts[section.key], instruction, sectionCounts, total)).join("")}
+        ${schema.map((section) => renderReportSection(section, selections, staffMap, originalTotals[section.key], instruction, emStaff)).join("")}
       </main>
       <footer class="footer"><span>PLEASE FOLLOW AIRPORT & AIRLINE GUIDELINES</span><span>THANK YOU FOR YOUR DEDICATION & SERVICE</span></footer>
     </section>
@@ -141,15 +148,14 @@ function getReportHtml(reportState) {
   </html>`;
 }
 
-function renderReportSection(section, selections, staffMap, count, instruction, sectionCounts, total) {
+function renderReportSection(section, selections, staffMap, originalCount, instruction, emStaff) {
   let fieldsToRender = [...section.fields];
   let customPostContent = "";
 
-  // ডমেস্টিক কলামের রেন্ডারিং এবং শেষে NIGHT STAFF এবং SPECIAL INSTRUCTION
+  // ডমেস্টিক কলামের শেষে NIGHT STAFF এবং SPECIAL INSTRUCTION রেন্ডার করা
   if (section.key === "domestic") {
     const nightStaffIds = selections["international.nightStaff"] || [];
-    // নাম রিনেম করে "NIGHT STAFF" এবং ব্যাকগ্রাউন্ড কালার পার্পেল করা হলো
-    const nightStaffMarkup = renderSpecialReportCategory("NIGHT STAFF", nightStaffIds, staffMap, "#701a75");
+    const nightStaffMarkup = renderSpecialReportCategory("NIGHT STAFF", nightStaffIds, staffMap, "#701a75", emStaff);
 
     customPostContent = `
       ${nightStaffMarkup}
@@ -160,55 +166,35 @@ function renderReportSection(section, selections, staffMap, count, instruction, 
     `;
   }
 
-  // আন্তর্জাতিক কলাম থেকে ৩টি বিশেষ সেকশন রেন্ডার বন্ধ রাখা
+  // ইন্টারন্যাশনাল কলাম থেকে NIGHT STAFF এবং WHEELCHAIR (INT) হাইড করা
   if (section.key === "international") {
     fieldsToRender = fieldsToRender.filter(([key]) => 
-      key !== "international.earlyMorningCounter" && 
-      key !== "international.earlyMorningRamp" && 
-      key !== "international.nightStaff"
+      key !== "international.nightStaff" && 
+      key !== "international.wheelChairInt"
     );
   }
 
-  // অফ ডিউটি কলামের শেষে EARLY MORNING বক্স দুটি পার্পেল কালার ব্যাকগ্রাউন্ডে যোগ করা হলো
+  // অফ ডিউটি কলামের শেষে WHEELCHAIR (INT) বক্সটি স্থানান্তর করা
   if (section.key === "off") {
-    const emCounterIds = selections["international.earlyMorningCounter"] || [];
-    const emRampIds = selections["international.earlyMorningRamp"] || [];
-
-    // নাম ও ব্যাকগ্রাউন্ড কালার পার্পেল করা হলো
-    const emCounterMarkup = renderSpecialReportCategory("EARLY MORNING (COUNTER)", emCounterIds, staffMap, "#701a75");
-    const emRampMarkup = renderSpecialReportCategory("EARLY MORNING (RAMP)", emRampIds, staffMap, "#701a75");
+    const wcIntIds = selections["international.wheelChairInt"] || [];
+    const wcIntMarkup = renderSpecialReportCategory("WHEELCHAIR (INT)", wcIntIds, staffMap, "#701a75", emStaff);
 
     customPostContent = `
-      ${emCounterMarkup}
-      ${emRampMarkup}
+      ${wcIntMarkup}
     `;
   }
-
-  const displayCount = calculateColumnTotal(section.key, selections, fieldsToRender);
 
   return `
   <div style="display: flex; flex-direction: column;">
     <article class="column ${section.key}">
-      <h2>${section.title} (${displayCount})</h2>
-      ${fieldsToRender.map(([fieldKey, label]) => renderReportCategory(label, selections[fieldKey] || [], staffMap)).join("")}
+      <h2>${section.title} (${originalCount})</h2>
+      ${fieldsToRender.map(([fieldKey, label]) => renderReportCategory(label, selections[fieldKey] || [], staffMap, emStaff)).join("")}
     </article>
     ${customPostContent}
   </div>`;
 }
 
-function calculateColumnTotal(sectionKey, selections, fieldsToRender) {
-  let count = fieldsToRender.reduce((sum, [key]) => sum + (selections[key] || []).length, 0);
-  if (sectionKey === "domestic") {
-    count += (selections["international.nightStaff"] || []).length;
-  }
-  if (sectionKey === "off") {
-    count += (selections["international.earlyMorningCounter"] || []).length;
-    count += (selections["international.earlyMorningRamp"] || []).length;
-  }
-  return count;
-}
-
-function renderSpecialReportCategory(label, ids, staffMap, specialBgColor) {
+function renderSpecialReportCategory(label, ids, staffMap, specialBgColor, emStaff) {
   const rows = ids
     .map((id) => staffMap.get(id))
     .filter(Boolean)
@@ -218,17 +204,21 @@ function renderSpecialReportCategory(label, ids, staffMap, specialBgColor) {
     <div class="category-title" style="background: ${specialBgColor}; color: white; padding: 6px 10px; font-size: 13px; font-weight: 900; text-align: center; text-transform: uppercase;">${escapeHtml(label)}</div>
     <table>
       <tbody>
-        ${rows.length ? rows.map((person, index) => `
+        ${rows.length ? rows.map((person, index) => {
+          const isEM = emStaff.includes(person.id);
+          const emLabel = isEM ? ` <span style="color:#cf1f32; font-weight:900; margin-left:4px; font-size:11px;">(E/M)</span>` : "";
+          return `
           <tr>
             <td style="width: 28px; color: ${specialBgColor}; font-weight: 900; border-bottom: 1px solid #e5ebf3; padding: 4px 10px; font-size: 12.5px;">${index + 1}</td>
-            <td style="font-weight: 850; color: var(--ink); border-bottom: 1px solid #e5ebf3; padding: 4px 10px; font-size: 12.5px;">${escapeHtml(person.number)} - ${escapeHtml(person.name)}</td>
-          </tr>`).join("") : `<tr><td colspan="2" class="empty">No staff selected</td></tr>`}
+            <td style="font-weight: 850; color: var(--ink); border-bottom: 1px solid #e5ebf3; padding: 4px 10px; font-size: 12.5px;">${escapeHtml(person.number)} - ${escapeHtml(person.name)}${emLabel}</td>
+          </tr>`;
+        }).join("") : `<tr><td colspan="2" class="empty">No staff selected</td></tr>`}
       </tbody>
     </table>
   </div>`;
 }
 
-function renderReportCategory(label, ids, staffMap) {
+function renderReportCategory(label, ids, staffMap, emStaff) {
   const isAbsent = /ABSENT/i.test(label);
   const rows = ids
     .map((id) => staffMap.get(id))
@@ -238,11 +228,15 @@ function renderReportCategory(label, ids, staffMap) {
     <div class="category-title ${isAbsent ? "absent" : ""}">${escapeHtml(label)}</div>
     <table>
       <tbody>
-        ${rows.length ? rows.map((person, index) => `
+        ${rows.length ? rows.map((person, index) => {
+          const isEM = emStaff.includes(person.id);
+          const emLabel = isEM ? ` <span style="color:#cf1f32; font-weight:900; margin-left:4px; font-size:11px;">(E/M)</span>` : "";
+          return `
           <tr class="${isAbsent ? "absent-row" : ""}">
             <td>${index + 1}</td>
-            <td>${escapeHtml(person.number)} - ${escapeHtml(person.name)}</td>
-          </tr>`).join("") : `<tr><td colspan="2" class="empty">No staff selected</td></tr>`}
+            <td>${escapeHtml(person.number)} - ${escapeHtml(person.name)}${emLabel}</td>
+          </tr>`;
+        }).join("") : `<tr><td colspan="2" class="empty">No staff selected</td></tr>`}
       </tbody>
     </table>
   </div>`;
