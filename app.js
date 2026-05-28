@@ -25,10 +25,7 @@ const sectionSchema = [
       ["international.ramp", "RAMP AREA"],
       ["international.arrivalBelt", "ARRIVAL BAGGAGE BELT"],
       ["international.arrivalHall", "ARRIVAL BAGGAGE HALL"],
-      ["international.wheelChairDept", "WHEELCHAIR (DEPT)"],
-      ["international.wheelChairArv", "WHEELCHAIR (ARV)"],
-      ["international.earlyMorningCounter", "EARLY MORNING (COUNTER)"],
-      ["international.earlyMorningRamp", "EARLY MORNING (RAMP)"],
+      ["international.wheelChairInt", "WHEELCHAIR (INT)"],
       ["international.nightStaff", "NIGHT STAFF"]
     ]
   },
@@ -37,7 +34,7 @@ const sectionSchema = [
     title: "OFF DUTY",
     fields: [
       ["off.normal", "DAY OFF"],
-      ["off.casualEarned", "CASUAL/EARNED"],
+      ["off.casualEarnedGovt", "CASUAL/EARNED/GOVT"],
       ["off.sick", "SICK LEAVE"],
       ["off.compensatory", "COMPENSATORY OFF"],
       ["off.absent", "ABSENT (PREVIOUS DAY)"]
@@ -59,7 +56,8 @@ const state = {
   shift: "MORNING",
   instruction: "",
   selections: {},
-  customFields: []
+  customFields: [],
+  emStaff: [] // E/M চিহ্নিত স্টাফ আইডিগুলো সংরক্ষণের জন্য
 };
 
 let staff = [];
@@ -118,6 +116,7 @@ function restoreState() {
     const parsed = JSON.parse(saved);
     Object.assign(state, parsed);
     if (!state.customFields) state.customFields = [];
+    if (!state.emStaff) state.emStaff = [];
   }
   if (!state.date) state.date = new Date().toISOString().slice(0, 10);
   
@@ -275,18 +274,47 @@ function renderSelectedLists() {
     const count = $(`#${cssId(key)}Count`);
     if (!list || !count) return;
     count.textContent = `${selected.length} selected`;
-    list.innerHTML = selected.map((person, index) => `
-      <div class="selected-chip">
-        <span>${index + 1}. ${person.id} - ${person.name}</span>
-        <button type="button" aria-label="Remove ${person.name}" data-remove="${person.id}" data-field="${key}">x</button>
-      </div>
-    `).join("");
+    
+    list.innerHTML = selected.map((person, index) => {
+      const isEM = (state.emStaff || []).includes(person.id);
+      // শুধুমাত্র ডমেস্টিক এবং ইন্টারন্যাশনাল কলামের জন্য E/M চেকবক্স প্রদর্শন করার লজিক
+      const showEM = key.startsWith("domestic") || key.startsWith("international");
+      const emToggle = showEM ? `
+        <label style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.75rem; color: #cf1f32; font-weight: 800; cursor: pointer; margin-right: 6px; user-select: none;">
+          <input type="checkbox" class="em-staff-checkbox" data-staff-id="${person.id}" ${isEM ? "checked" : ""} style="width: 14px; height: 14px; margin: 0; cursor: pointer;"> E/M
+        </label>
+      ` : "";
+
+      return `
+        <div class="selected-chip" style="display: flex; align-items: center; justify-content: space-between;">
+          <span style="font-weight: 600;">${index + 1}. ${person.id} - ${person.name}</span>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            ${emToggle}
+            <button type="button" aria-label="Remove ${person.name}" data-remove="${person.id}" data-field="${key}" style="margin:0;">x</button>
+          </div>
+        </div>
+      `;
+    }).join("");
   });
 
   $$("[data-remove]").forEach((button) => {
     button.addEventListener("click", (event) => {
       event.stopPropagation();
       removeStaff(button.dataset.field, button.dataset.remove);
+    });
+  });
+
+  // E/M চেকবক্স ক্লিকের ইভেন্ট লিসেনার
+  $$(".em-staff-checkbox").forEach((cb) => {
+    cb.addEventListener("change", () => {
+      const id = cb.dataset.staffId;
+      if (!state.emStaff) state.emStaff = [];
+      if (cb.checked) {
+        if (!state.emStaff.includes(id)) state.emStaff.push(id);
+      } else {
+        state.emStaff = state.emStaff.filter(item => item !== id);
+      }
+      saveState();
     });
   });
 }
@@ -340,7 +368,6 @@ function renderOptions(fieldKey, query) {
   const term = query.trim().toLowerCase();
   
   const isWheelchairField = fieldKey.toLowerCase().includes("wheelchair");
-  // অফ ডিউটি কলাম আইডি ফিল্টারিং চেক
   const isOffDutyField = fieldKey.startsWith("off.");
 
   const visible = staff.filter((person) => {
@@ -348,13 +375,12 @@ function renderOptions(fieldKey, query) {
 
     const isWheelchairStaff = WHEELCHAIR_ONLY_IDS.includes(person.id);
     
-    // অফ ডিউটি কলামে মেল এবং ফিমেল (হুইলচেয়ার) উভয় স্টাফই থাকতে পারবে
     if (isOffDutyField) {
-      // অফ ডিউটির ক্ষেত্রে কোনো হুইলচেয়ারের সীমাবদ্ধতা প্রযোজ্য হবে না
+      // অফ ডিউটিতে হুইলচেয়ার এবং সাধারণ সব স্টাফই এলাউড
     } else if (isWheelchairField) {
-      if (!isWheelchairStaff) return false; // হুইলচেয়ার ফিল্ডে শুধু হুইলচেয়ার স্টাফ
+      if (!isWheelchairStaff) return false;
     } else {
-      if (isWheelchairStaff) return false; // অন্য নরমাল ডিউটিতে হুইলচেয়ারের ফিমেল স্টাফরা বাদ থাকবে
+      if (isWheelchairStaff) return false;
     }
 
     if (!term) return true;
