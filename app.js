@@ -120,9 +120,23 @@ function restoreState() {
   }
   if (!state.date) state.date = new Date().toISOString().slice(0, 10);
   
-  getCombinedSchema().flatMap((section) => section.fields).forEach(([key]) => {
+  // কাস্টম ফিল্ডসহ সম্পূর্ণ সক্রিয় ফিল্ড স্কিমা তৈরি
+  const combinedSchema = getCombinedSchema();
+  const activeKeys = new Set(combinedSchema.flatMap(section => section.fields).map(([key]) => key));
+
+  // মেমোরি ফিল্টারিং: পুরানো বা বাতিল হয়ে যাওয়া বক্সের ডেটা থাকলে তা স্বয়ংক্রিয়ভাবে মেমোরি থেকে মুছে ফেলার লজিক
+  if (state.selections) {
+    Object.keys(state.selections).forEach(key => {
+      if (!activeKeys.has(key)) {
+        delete state.selections[key];
+      }
+    });
+  }
+
+  activeKeys.forEach((key) => {
     if (!Array.isArray(state.selections[key])) state.selections[key] = [];
   });
+  saveState();
 }
 
 function saveState() {
@@ -164,7 +178,6 @@ function bindEvents() {
     saveState();
   });
 
-  // শিফট পরিবর্তন করার সময় সাথে সাথে ভিউ বিল্ড করার লজিক
   $("#shiftSelect").addEventListener("change", (event) => {
     state.shift = event.target.value;
     saveState();
@@ -281,7 +294,6 @@ function renderSelectedLists() {
     list.innerHTML = selected.map((person, index) => {
       const isEM = (state.emStaff || []).includes(person.id);
       
-      // MORNING শিফটে থাকলেই কেবল ডমেস্টিক এবং ইন্টারন্যাশনাল কলামের জন্য E/M চেকবক্স দেখানোর লজিক
       const isMorning = state.shift === "MORNING";
       const showEM = isMorning && (key.startsWith("domestic") || key.startsWith("international"));
       
@@ -420,6 +432,7 @@ function removeStaff(fieldKey, staffId) {
   toast("Staff returned to available lists.");
 }
 
+// লগ-আউট বা পেজ রিলোড দিলে স্বয়ংক্রিয়ভাবে অচল ডেটা ক্লিন হয়ে যাবে
 function closeDropdown() {
   if (activeDropdown?.panel) activeDropdown.panel.remove();
   activeDropdown = null;
